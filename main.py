@@ -1,94 +1,53 @@
-
 import os
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
-import httpx
+import requests
+from fastapi import FastAPI, Request
+import google.generativeai as genai
 
 app = FastAPI()
 
-# Получаем ключи из переменных окружения Render
-API_KEYS = {
-    "gemini": os.getenv("GEMINI_API_KEY"),
-    "groq": os.getenv("GROQ_API_KEY"),
-    "mistral": os.getenv("MISTRAL_API_KEY"),
-    "backup": os.getenv("BACKUP_API_KEY")
-}
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+GATEWAY_URL = os.getenv("GATEWAY_URL")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-class ChatRequest(BaseModel):
-    message: str
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
-async def call_gemini(prompt: str, api_key: str):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload, timeout=10.0)
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail="Gemini rate limit or error")
-        data = response.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-
-async def call_groq(prompt: str, api_key: str):
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {
-        "model": "llama3-8b-8192",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload, headers=headers, timeout=10.0)
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail="Groq rate limit or error")
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
-
-async def call_mistral(prompt: str, api_key: str):
-    url = "https://api.mistral.ai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {
-        "model": "mistral-tiny",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload, headers=headers, timeout=10.0)
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail="Mistral rate limit or error")
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
-
-@app.post("/webhook")
-async def ai_gateway(req: ChatRequest):
-    prompt = req.message
-    
-    # 1. Попытка: Gemini
-    if API_KEYS["gemini"]:
+@app.on_event("startup")
+def set_telegram_webhook():
+    if TELEGRAM_BOT_TOKEN and GATEWAY_URL:
+        webhook_url = f"{GATEWAY_URL.rstrip('/')}/webhook/telegram"
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook?url={webhook_url}"
         try:
-            answer = await call_gemini(prompt, API_KEYS["gemini"])
-            return {"provider": "gemini", "response": answer}
-        except Exception:
-            pass
+            response = requests.get(url)
+            print("Webhook setup response:", response.json())
+        except Exception as e:
+            print("Failed to set webhook:", e)
 
-    # 2. Попытка: Groq
-    if API_KEYS["groq"]:
-        try:
-            answer = await call_groq(prompt, API_KEYS["groq"])
-            return {"provider": "groq", "response": answer}
-        except Exception:
-            pass
+@app.post("/webhook/telegram")
+async def telegram_webhook(request: Request):
+    try:
+        data = await request.json()
+        if "message" in data:
+            chat_id = data["message"]["chat"]["id"]
+            text = data["message"].get("text", "")
+            
+            if text and TELEGRAM_BOT_TOKEN:
+                reply_text = "Не удалось обработать запрос."
+                if GEMINI_API_KEY:
+                    try:
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        response = model.generate_content(text)
+                        reply_text = response.text
+                    except Exception as ai_err:
+                        reply_text = f"Ошибка ИИ: {str(ai_err)}"
+                
+                url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+                requests.post(url, json={"chat_id": chat_id, "text": reply_text})
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        
+    return {"status": "ok"}
 
-    # 3. Попытка: Mistral
-    if API_KEYS["mistral"]:
-        try:
-            answer = await call_mistral(prompt, API_KEYS["mistral"])
-            return {"provider": "mistral", "response": answer}
-        except Exception:
-            pass
-
-    # 4. Попытка: Резервный провайдер
-    if API_KEYS["backup"]:
-        try:
-            answer = await call_groq(prompt, API_KEYS["backup"]) 
-            return {"provider": "backup", "response": answer}
-        except Exception:
-            pass
-
-    raise HTTPException(status_code=503, detail="All AI providers are currently rate-limited or unavailable.")
+@app.get("/")
+def root():
+    return {"status": "AI Gateway is running"}
