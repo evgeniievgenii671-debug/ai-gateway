@@ -46,7 +46,8 @@ async def telegram_webhook(request: Request):
             
             reply_text = ""
             
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            # trust_env=False отключает перехват системных переменных окружения GCP/Render
+            async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
                 payload = {
                     "contents": [{
                         "parts": [{"text": f"{system_instruction}\n\nКлиент написал: {user_text}"}]
