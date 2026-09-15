@@ -11,7 +11,7 @@ app = FastAPI()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Инициализируем клиент Gemini с актуальной моделью
+# Инициализируем клиент Gemini
 client = genai.Client(api_key=GEMINI_API_KEY)
 MODEL_NAME = "gemini-2.0-flash"
 
@@ -21,9 +21,10 @@ def ask_gemini_with_retry(prompt: str, max_retries: int = 3) -> str:
     delay = 5
     for attempt in range(max_retries):
         try:
+            # Используем самый стабильный синтаксис для нового клиента
             response = client.models.generate_content(
                 model=MODEL_NAME,
-                contents=prompt,
+                contents=prompt
             )
             if response and response.text:
                 return response.text
@@ -32,7 +33,6 @@ def ask_gemini_with_retry(prompt: str, max_retries: int = 3) -> str:
             err_str = str(e)
             print(f"Ошибка Gemini (попытка {attempt + 1}/{max_retries}): {err_str}")
             
-            # Ловим лимиты (429), перегрузку (503) или ошибки доступности
             if "429" in err_str or "503" in err_str or "404" in err_str or "RESOURCE_EXHAUSTED" in err_str or "UNAVAILABLE" in err_str:
                 if attempt == max_retries - 1:
                     return "⚠️ Нейросеть перегружена или недоступна. Пожалуйста, подождите минутку и повторите попытку."
@@ -40,7 +40,7 @@ def ask_gemini_with_retry(prompt: str, max_retries: int = 3) -> str:
                 time.sleep(delay)
                 delay *= 2
             else:
-                return f"⚠️ Произошла ошибка при обращении к нейросети: {err_str[:100]}"
+                return f"⚠️ Ошибка при обращении к нейросети: {err_str[:100]}"
                 
     return "Не удалось получить ответ от нейросети."
 
@@ -56,7 +56,7 @@ async def telegram_webhook(request: Request):
             
             print(f"User said: {user_message}")
 
-            # Запрос к Gemini с надежной защитой
+            # Запрос к Gemini с защитой
             ai_reply = ask_gemini_with_retry(user_message)
             print(f"Gemini reply: {ai_reply}")
 
