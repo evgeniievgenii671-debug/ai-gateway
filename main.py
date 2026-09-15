@@ -10,6 +10,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
 
+@app.get("/")
+async def root():
+    return {"status": "running", "bot": "active"}
+
 @app.post("/")
 async def handle_telegram_webhook(request: Request):
     data = await request.json()
