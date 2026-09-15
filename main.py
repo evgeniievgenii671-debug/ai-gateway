@@ -6,7 +6,6 @@ import google.generativeai as genai
 
 app = FastAPI()
 
-# Жестко прописываем рабочий ключ для классической библиотеки
 genai.configure(api_key="AQ.Ab8RN6IKsmLU-6WJ2uB14wXBY-5eQBF9s5j7u1-jZJzt2aGBYg")
 model = genai.GenerativeModel("gemini-1.5-flash")
 
