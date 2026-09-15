@@ -28,13 +28,16 @@ async def telegram_webhook(request: Request):
     try:
         data = await request.json()
         
-        if "message" in data and "text" in data["message"]:
-            chat_id = data["message"]["chat"]["id"]
-            user_text = data["message"]["text"]
+        # Проверяем наличие message и chat
+        message = data.get("message") or data.get("edited_message")
+        if message and "chat" in message:
+            chat_id = message["chat"]["id"]
+            user_text = message.get("text", "[нет текста]")
+            
+            print(f"EXTRACTED chat_id: {chat_id}, text: {user_text}")
             
             assistant = get_next_assistant()
             active_assistant_name = assistant["name"]
-            print(f"Assigned to: {active_assistant_name}, Text: {user_text}")
             
             reply_text = (
                 f"[{active_assistant_name}] Здравствуйте! Получил ваш запрос: «{user_text}». "
@@ -47,7 +50,7 @@ async def telegram_webhook(request: Request):
                     json={"chat_id": chat_id, "text": reply_text}
                 )
                 print("TELEGRAM SEND STATUS:", resp.status_code)
-                print("TELEGRAM FULL ERROR:", resp.json())
+                print("TELEGRAM RESPONSE:", resp.text)
                 
     except Exception as e:
         print(f"CRITICAL EXCEPTION: {e}")
