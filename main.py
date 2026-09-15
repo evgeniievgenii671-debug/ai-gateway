@@ -30,7 +30,6 @@ async def telegram_webhook(request: Request):
     print("--- WEBHOOK TRIGGERED ---")
     try:
         data = await request.json()
-        print("DATA RECEIVED:", data)
         
         if "message" in data and "text" in data["message"]:
             chat_id = data["message"]["chat"]["id"]
@@ -38,12 +37,11 @@ async def telegram_webhook(request: Request):
             
             assistant = get_next_assistant()
             active_assistant_name = assistant["name"]
-            print(f"Assigned to: {active_assistant_name}, Text: {user_text}, Chat ID: {chat_id}")
+            print(f"Assigned to: {active_assistant_name}, Text: {user_text}")
             
             system_instruction = (
                 f"Ты — {active_assistant_name}, профессиональный менеджер компании по продаже качественного кафеля "
-                f"и современных эпоксидных полов. Общайся с клиентами живо, дружелюбно, отвечай по делу, "
-                f"помогай с выбором и консультируй по характеристикам."
+                f"и современных эпоксидных полов. Отвечай коротко, вежливо и по делу."
             )
             
             reply_text = ""
@@ -55,7 +53,11 @@ async def telegram_webhook(request: Request):
                     }]
                 }
                 
-                ai_resp = await client.post(GEMINI_URL, json=payload)
+                ai_resp = await client.post(
+                    GEMINI_URL, 
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
                 print("GEMINI STATUS:", ai_resp.status_code)
                 
                 if ai_resp.status_code == 200:
@@ -65,16 +67,16 @@ async def telegram_webhook(request: Request):
                         reply_text = f"[{active_assistant_name}]\n{ai_text}"
                     except Exception as parse_err:
                         print("PARSE ERROR:", parse_err)
-                        reply_text = f"[{active_assistant_name}] Здравствуйте! Готов помочь с выбором кафеля и эпоксидных полов."
+                        reply_text = f"[{active_assistant_name}] Здравствуйте! Готов проконсультировать по кафелю и эпоксидным полам."
                 else:
                     print("GEMINI ERROR TEXT:", ai_resp.text)
-                    reply_text = f"[{active_assistant_name}] Приветствую! Подскажите, какой объем кафеля или эпоксидных полов вас интересует?"
+                    reply_text = f"[{active_assistant_name}] Приветствую! Какой объем материалов вас интересует?"
 
                 resp = await client.post(
                     TELEGRAM_SEND_MESSAGE_URL,
                     json={"chat_id": chat_id, "text": reply_text}
                 )
-                print("TELEGRAM SEND STATUS:", resp.status_code, resp.text)
+                print("TELEGRAM SEND STATUS:", resp.status_code)
                 
     except Exception as e:
         print(f"CRITICAL EXCEPTION: {e}")
@@ -85,6 +87,4 @@ async def telegram_webhook(request: Request):
 async def whatsapp_webhook(request: Request):
     data = await request.json()
     assistant = get_next_assistant()
-    active_assistant_name = assistant["name"]
-    print(f"WhatsApp request handled by {active_assistant_name}: {data}")
-    return {"status": "received", "assistant": active_assistant_name}
+    return {"status": "received", "assistant": assistant["name"]}
