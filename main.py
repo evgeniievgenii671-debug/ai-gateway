@@ -31,7 +31,7 @@ async def handle_telegram_webhook(request: Request):
                     "Content-Type": "application/json"
                 }
                 payload = {
-                "model": "mixtral-8x7b-32768",
+               "model": "llama-3.3-70b-versatile",
                     "messages": [
                         {"role": "user", "content": user_text}
                     ]
