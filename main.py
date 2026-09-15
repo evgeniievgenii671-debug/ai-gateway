@@ -18,10 +18,12 @@ async def root():
 @app.post("/")
 async def handle_telegram_webhook(request: Request):
     data = await request.json()
+    print("Входящий запрос от Telegram:", data)
     
     if "message" in data and "text" in data["message"]:
         chat_id = data["message"]["chat"]["id"]
         user_message = data["message"]["text"]
+        print(f"Текст от пользователя {chat_id}: {user_message}")
         
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         
@@ -31,13 +33,16 @@ async def handle_telegram_webhook(request: Request):
                 contents=user_message
             )
             reply_text = response.text
+            print(f"Ответ от Gemini: {reply_text}")
         except (ServerError, ClientError) as e:
-            reply_text = "Сервер временно перегружен, попробуй отправить сообщение еще раз через пару секунд!"
+            print(f"Ошибка Gemini API: {e}")
+            reply_text = "Сервер временно перегружен, попробуй отправить сообщение еще раз!"
         
         payload = {
             "chat_id": chat_id,
             "text": reply_text
         }
-        requests.post(telegram_url, json=payload)
+        res = requests.post(telegram_url, json=payload)
+        print(f"Ответ от Telegram API: {res.status_code}, {res.text}")
         
     return {"status": "ok"}
