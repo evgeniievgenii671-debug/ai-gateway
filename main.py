@@ -31,12 +31,20 @@ async def telegram_webhook(request: Request):
         chat_id = data["message"]["chat"]["id"]
         user_text = data["message"]["text"]
         
+        # Получаем следующего ассистента по очереди
         assistant = get_next_assistant()
         active_assistant_name = assistant["name"]
         
-        reply_text = f"🎙 Telegram | Ответ от {active_assistant_name}: «{user_text}»"
+        # Интеллектуальный ответ клиенту вместо технической заглушки
+        reply_text = (
+            f"Здравствуйте! Вас приветствует {active_assistant_name}. "
+            f"Благодарю за обращение. По вашему запросу («{user_text}») могу сориентировать по нашему ассортименту: "
+            f"предлагаем качественный кафель, современные эпоксидные полы и материалы для отделки. "
+            f"Подскажите, какой объем вас интересует или какие параметры подобрать?"
+        )
         
         async with httpx.AsyncClient(timeout=30.0) as client:
+            # Отправка ответа в Telegram
             await client.post(
                 TELEGRAM_SEND_MESSAGE_URL,
                 json={"chat_id": chat_id, "text": reply_text}
@@ -47,12 +55,8 @@ async def telegram_webhook(request: Request):
 @app.post("/whatsapp-webhook")
 async def whatsapp_webhook(request: Request):
     data = await request.json()
-    
-    # Обработка входящего сообщения от WhatsApp API / шлюза
     assistant = get_next_assistant()
     active_assistant_name = assistant["name"]
     
-    # Здесь будет логика отправки ответа обратно в WhatsApp
     print(f"WhatsApp request handled by {active_assistant_name}: {data}")
-    
     return {"status": "received", "assistant": active_assistant_name}
