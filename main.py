@@ -8,12 +8,12 @@ app = FastAPI()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8680814733:AAGUbD-eHtDXy7XyR4N2TpEQmdk0vYX_B8M")
 TELEGRAM_SEND_MESSAGE_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-# Настройка Gemini API из переменных окружения на Render
+# Автонастройка Gemini с ключом из переменных Render
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_KEY:
     genai.configure(api_key=GEMINI_KEY)
 
-# Пул из 4 ассистентов для отказоустойчивости и распределения диалогов
+# Пул из 4 ассистентов с ротацией по кругу
 AI_ASSISTANTS = [
     {"id": 1, "name": "Ассистент-Альфа"},
     {"id": 2, "name": "Ассистент-Бета"},
@@ -37,11 +37,9 @@ async def telegram_webhook(request: Request):
         chat_id = data["message"]["chat"]["id"]
         user_text = data["message"]["text"]
         
-        # Получаем ассистента из пула ротации
         assistant = get_next_assistant()
         active_assistant_name = assistant["name"]
         
-        # Системный промпт для роли эксперта по строительным материалам
         system_instruction = (
             f"Ты — {active_assistant_name}, профессиональный менеджер компании по продаже качественного кафеля "
             f"и современных эпоксидных полов. Общайся с клиентами живо, дружелюбно, подстраивайся под их стиль речи, "
@@ -51,17 +49,13 @@ async def telegram_webhook(request: Request):
         reply_text = ""
         
         try:
-            # Генерация ответа через Gemini
-            model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
-                system_instruction=system_instruction
-            )
-            response = model.generate_content(user_text)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            prompt = f"{system_instruction}\n\nКлиент написал: {user_text}"
+            response = model.generate_content(prompt)
             reply_text = f"[{active_assistant_name}]\n{response.text}"
         except Exception as e:
-            reply_text = f"[{active_assistant_name}] Принял ваш запрос: «{user_text}». Подскажите, какой объем кафеля или эпоксидных полов вас интересует?"
+            reply_text = f"[{active_assistant_name}] Привет! Рад помочь с выбором кафеля и эпоксидных полов. Что именно вас интересует?"
 
-        # Отправка ответа в Telegram
         async with httpx.AsyncClient(timeout=30.0) as client:
             await client.post(
                 TELEGRAM_SEND_MESSAGE_URL,
