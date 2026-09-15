@@ -24,7 +24,7 @@ async def telegram_webhook(request: Request):
         
         try:
             response = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="models/gemini-1.5-flash",
                 contents=user_text,
             )
             if response and response.text:
