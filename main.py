@@ -27,6 +27,7 @@ async def telegram_webhook(request: Request):
     print("--- WEBHOOK TRIGGERED ---")
     try:
         data = await request.json()
+        print("INCOMING DATA:", data)
         
         if "message" in data and "text" in data["message"]:
             chat_id = data["message"]["chat"]["id"]
@@ -46,7 +47,8 @@ async def telegram_webhook(request: Request):
                     TELEGRAM_SEND_MESSAGE_URL,
                     json={"chat_id": chat_id, "text": reply_text}
                 )
-                print("TELEGRAM SEND STATUS:", resp.status_code, resp.text)
+                print("TELEGRAM SEND STATUS:", resp.status_code)
+                print("TELEGRAM RESPONSE TEXT:", resp.text)
                 
     except Exception as e:
         print(f"CRITICAL EXCEPTION: {e}")
