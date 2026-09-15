@@ -2,7 +2,6 @@ import os
 import time
 import httpx
 from fastapi import FastAPI, Request
-from google.api_core.exceptions import ResourceExhausted
 from google import genai
 
 app = FastAPI()
@@ -25,16 +24,23 @@ def ask_gemini_with_retry(prompt: str, max_retries: int = 3) -> str:
                 model=MODEL_NAME,
                 contents=prompt,
             )
-            return response.text
-        except ResourceExhausted:
-            print(f"Лимит Gemini исчерпан (попытка {attempt + 1}/{max_retries}). Ждем {delay} сек...")
-            if attempt == max_retries - 1:
-                return "⚠️ Превышен лимит запросов к нейросети (Free Tier). Пожалуйста, подождите минутку и повторите попытку."
-            time.sleep(delay)
-            delay *= 2
+            if response and response.text:
+                return response.text
+            return "Пустой ответ от нейросети."
         except Exception as e:
-            print(f"Ошибка Gemini: {e}")
-            return "Произошла ошибка при обращении к нейросети."
+            err_str = str(e)
+            print(f"Ошибка Gemini (попытка {attempt + 1}/{max_retries}): {err_str}")
+            
+            # Проверяем лимиты и ошибки квоты
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+                if attempt == max_retries - 1:
+                    return "⚠️ Превышен лимит запросов к нейросети (Free Tier). Пожалуйста, подождите минутку и повторите попытку."
+                print(f"Лимит исчерпан. Ждем {delay} сек...")
+                time.sleep(delay)
+                delay *= 2
+            else:
+                return f"Ошибка при обращении к нейросети: {err_str[:100]}"
+                
     return "Не удалось получить ответ от нейросети."
 
 @app.post("/webhook")
@@ -46,15 +52,14 @@ async def telegram_webhook(request: Request):
         if "message" in data and "text" in data["message"]:
             chat_id = data["message"]["chat"]["id"]
             user_message = data["message"]["text"]
-            user_name = data["message"]["from"].get("first_name", "User")
             
             print(f"User said: {user_message}")
 
-            # Запрос к Gemini с защитой от лимитов
+            # Запрос к Gemini с надежной защитой
             ai_reply = ask_gemini_with_retry(user_message)
             print(f"Gemini reply: {ai_reply}")
 
-            # Отправка ответа в Telegram через HTTP-клиент
+            # Отправка ответа в Telegram
             async with httpx.AsyncClient() as httpx_client:
                 payload = {
                     "chat_id": chat_id,
@@ -71,3 +76,4 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def root():
     return {"status": "Bot is running!"}
+ 
