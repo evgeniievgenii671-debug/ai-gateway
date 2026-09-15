@@ -26,6 +26,7 @@ def get_next_assistant():
 async def telegram_webhook(request: Request):
     try:
         data = await request.json()
+        print("INCOMING DATA:", data)
         
         chat_id = None
         user_text = ""
