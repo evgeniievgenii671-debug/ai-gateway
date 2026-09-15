@@ -12,7 +12,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Инициализируем клиент Gemini
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
@@ -31,15 +31,15 @@ def ask_gemini_with_retry(prompt: str, max_retries: int = 3) -> str:
             err_str = str(e)
             print(f"Ошибка Gemini (попытка {attempt + 1}/{max_retries}): {err_str}")
             
-            # Проверяем лимиты и ошибки квоты
-            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+            # Ловим лимиты (429), перегрузку (503) или квоты
+            if "429" in err_str or "503" in err_str or "RESOURCE_EXHAUSTED" in err_str or "UNAVAILABLE" in err_str:
                 if attempt == max_retries - 1:
-                    return "⚠️ Превышен лимит запросов к нейросети (Free Tier). Пожалуйста, подождите минутку и повторите попытку."
-                print(f"Лимит исчерпан. Ждем {delay} сек...")
+                    return "⚠️ Нейросеть перегружена или исчерпан лимит. Пожалуйста, подождите минутку и повторите попытку."
+                print(f"Сервер занят. Ждем {delay} сек...")
                 time.sleep(delay)
                 delay *= 2
             else:
-                return f"Ошибка при обращении к нейросети: {err_str[:100]}"
+                return "⚠️ Произошла временная ошибка при обращении к нейросети."
                 
     return "Не удалось получить ответ от нейросети."
 
@@ -65,7 +65,7 @@ async def telegram_webhook(request: Request):
                     "chat_id": chat_id,
                     "text": ai_reply
                 }
-                tg_resp = await httpx_client.post(f"{TELEGRAM_API_URL}/sendMessage", json=payload)
+                tg_resp = await httpx_client.post(f"{TELEGRAM_API_URL}/sendMessage", json.dumps(payload), headers={"Content-Type": "application/json"})
                 print(f"Telegram response: {tg_resp.text}")
 
     except Exception as e:
@@ -76,4 +76,4 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def root():
     return {"status": "Bot is running!"}
- 
+   
