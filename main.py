@@ -1,4 +1,5 @@
 import os
+import google.generativeai as genai
 from fastapi import FastAPI, Request
 import httpx
 
@@ -6,6 +7,10 @@ app = FastAPI()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8680814733:AAGUbD-eHtDXy7XyR4N2TpEQmdk0vYX_B8M")
 TELEGRAM_SEND_MESSAGE_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_KEY:
+    genai.configure(api_key=GEMINI_KEY)
 
 AI_ASSISTANTS = [
     {"id": 1, "name": "Ассистент-Альфа"},
@@ -26,35 +31,41 @@ def get_next_assistant():
 async def telegram_webhook(request: Request):
     try:
         data = await request.json()
-        print("INCOMING TELEGRAM DATA:", data)  # Вывод в лог Render для проверки
+        print("WEBHOOK RECEIVED:", data)
         
-        chat_id = None
-        user_text = ""
-        
+        # Жесткая проверка структуры сообщения от Telegram
         if "message" in data:
-            chat_id = data["message"]["chat"]["id"]
-            user_text = data["message"].get("text", "[нетекстовое сообщение]")
-        elif "edited_message" in data:
-            chat_id = data["edited_message"]["chat"]["id"]
-            user_text = data["edited_message"].get("text", "[ред. сообщение]")
-            
-        if chat_id:
-            assistant = get_next_assistant()
-            active_assistant_name = assistant["name"]
-            
-            reply_text = (
-                f"[{active_assistant_name}]\n"
-                f"Ваше сообщение получено: «{user_text}». "
-                f"Консультируем по кафелю и эпоксидным полам. Чем помочь?"
-            )
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                res = await client.post(
-                    TELEGRAM_SEND_MESSAGE_URL,
-                    json={"chat_id": chat_id, "text": reply_text}
-                )
-                print("TELEGRAM SEND STATUS:", res.status_code, res.text)
+            message_obj = data["message"]
+            if "text" in message_obj and "chat" in message_obj:
+                chat_id = message_obj["chat"]["id"]
+                user_text = message_obj["text"]
                 
+                assistant = get_next_assistant()
+                active_assistant_name = assistant["name"]
+                
+                system_instruction = (
+                    f"Ты — {active_assistant_name}, профессиональный менеджер компании по продаже качественного кафеля "
+                    f"и современных эпоксидных полов. Общайся с клиентами живо, дружелюбно, подстраивайся под их стиль речи, "
+                    f"отвечай по делу, помогай с выбором и консультируй по характеристикам."
+                )
+                
+                reply_text = ""
+                try:
+                    model = genai.GenerativeModel("gemini-1.5-flash")
+                    prompt = f"{system_instruction}\n\nКлиент написал: {user_text}"
+                    response = model.generate_content(prompt)
+                    reply_text = f"[{active_assistant_name}]\n{response.text}"
+                except Exception as ai_err:
+                    print("AI ERROR:", ai_err)
+                    reply_text = f"[{active_assistant_name}] Здравствуйте! Готов помочь вам с выбором кафеля или эпоксидных полов."
+
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        TELEGRAM_SEND_MESSAGE_URL,
+                        json={"chat_id": chat_id, "text": reply_text}
+                    )
+                    print("TELEGRAM RESPONSE STATUS:", resp.status_code, resp.text)
+                    
     except Exception as e:
         print(f"CRITICAL ERROR IN WEBHOOK: {e}")
         
