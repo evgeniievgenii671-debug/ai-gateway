@@ -31,7 +31,7 @@ async def handle_telegram_webhook(request: Request):
                     "Content-Type": "application/json"
                 }
                 payload = {
-              llama-3.1-8b-instant
+             "model": "llama-3.1-8b-instant",
                     "messages": [
                         {"role": "user", "content": user_text}
                     ]
