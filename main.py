@@ -1,4 +1,5 @@
-import os
+
+    import os
 import json
 import time
 from fastapi import FastAPI, Request
@@ -59,3 +60,4 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def root():
     return {"status": "bot is running"}
+
