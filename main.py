@@ -54,7 +54,8 @@ async def telegram_webhook(request: Request):
         async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
             resp = await client.post(
                 TELEGRAM_SEND_MESSAGE_URL,
-                json={"chat_id": chat_id, "text": reply_text}
+                json={"chat_id": chat_id, "text": reply_text},
+                headers={"Content-Type": "application/json"}
             )
             print("TELEGRAM STATUS:", resp.status_code, resp.text)
                 
