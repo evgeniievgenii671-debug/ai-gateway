@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import httpx
 from fastapi import FastAPI, Request
 from google import genai
@@ -10,9 +11,9 @@ app = FastAPI()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Инициализируем клиент Gemini
+# Инициализируем клиент Gemini с актуальной моделью
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-2.0-flash"
 
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
@@ -31,15 +32,15 @@ def ask_gemini_with_retry(prompt: str, max_retries: int = 3) -> str:
             err_str = str(e)
             print(f"Ошибка Gemini (попытка {attempt + 1}/{max_retries}): {err_str}")
             
-            # Ловим лимиты (429), перегрузку (503) или квоты
-            if "429" in err_str or "503" in err_str or "RESOURCE_EXHAUSTED" in err_str or "UNAVAILABLE" in err_str:
+            # Ловим лимиты (429), перегрузку (503) или ошибки доступности
+            if "429" in err_str or "503" in err_str or "404" in err_str or "RESOURCE_EXHAUSTED" in err_str or "UNAVAILABLE" in err_str:
                 if attempt == max_retries - 1:
-                    return "⚠️ Нейросеть перегружена или исчерпан лимит. Пожалуйста, подождите минутку и повторите попытку."
-                print(f"Сервер занят. Ждем {delay} сек...")
+                    return "⚠️ Нейросеть перегружена или недоступна. Пожалуйста, подождите минутку и повторите попытку."
+                print(f"Сервер занят/ошибка модели. Ждем {delay} сек...")
                 time.sleep(delay)
                 delay *= 2
             else:
-                return "⚠️ Произошла временная ошибка при обращении к нейросети."
+                return f"⚠️ Произошла ошибка при обращении к нейросети: {err_str[:100]}"
                 
     return "Не удалось получить ответ от нейросети."
 
@@ -65,7 +66,11 @@ async def telegram_webhook(request: Request):
                     "chat_id": chat_id,
                     "text": ai_reply
                 }
-                tg_resp = await httpx_client.post(f"{TELEGRAM_API_URL}/sendMessage", json.dumps(payload), headers={"Content-Type": "application/json"})
+                tg_resp = await httpx_client.post(
+                    f"{TELEGRAM_API_URL}/sendMessage", 
+                    data=json.dumps(payload), 
+                    headers={"Content-Type": "application/json"}
+                )
                 print(f"Telegram response: {tg_resp.text}")
 
     except Exception as e:
@@ -76,4 +81,3 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def root():
     return {"status": "Bot is running!"}
-   
