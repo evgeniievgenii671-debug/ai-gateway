@@ -38,17 +38,43 @@ async def telegram_webhook(request: Request):
             
             assistant = get_next_assistant()
             active_assistant_name = assistant["name"]
-            print(f"Assigned to: {active_assistant_name}, Text: {user_text}")
+            print(f"Assigned to: {active_assistant_name}, Text: {user_text}, Chat ID: {chat_id}")
             
-            reply_text = f"[{active_assistant_name}] Привет! Обрабатываю ваш запрос по кафелю и эпоксидным полам..."
+            system_instruction = (
+                f"Ты — {active_assistant_name}, профессиональный менеджер компании по продаже качественного кафеля "
+                f"и современных эпоксидных полов. Общайся с клиентами живо, дружелюбно, отвечай по делу, "
+                f"помогай с выбором и консультируй по характеристикам."
+            )
+            
+            reply_text = ""
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "contents": [{
+                        "parts": [{"text": f"{system_instruction}\n\nКлиент написал: {user_text}"}]
+                    }]
+                }
+                
+                ai_resp = await client.post(GEMINI_URL, json=payload)
+                print("GEMINI STATUS:", ai_resp.status_code)
+                
+                if ai_resp.status_code == 200:
+                    ai_data = ai_resp.json()
+                    try:
+                        ai_text = ai_data["candidates"][0]["content"]["parts"][0]["text"]
+                        reply_text = f"[{active_assistant_name}]\n{ai_text}"
+                    except Exception as parse_err:
+                        print("PARSE ERROR:", parse_err)
+                        reply_text = f"[{active_assistant_name}] Здравствуйте! Готов помочь с выбором кафеля и эпоксидных полов."
+                else:
+                    print("GEMINI ERROR TEXT:", ai_resp.text)
+                    reply_text = f"[{active_assistant_name}] Приветствую! Подскажите, какой объем кафеля или эпоксидных полов вас интересует?"
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Сначала шлем быстрый предварительный ответ, чтобы проверить связь с Telegram
                 resp = await client.post(
                     TELEGRAM_SEND_MESSAGE_URL,
                     json={"chat_id": chat_id, "text": reply_text}
                 )
-                print("TELEGRAM INITIAL SEND STATUS:", resp.status_code, resp.text)
+                print("TELEGRAM SEND STATUS:", resp.status_code, resp.text)
                 
     except Exception as e:
         print(f"CRITICAL EXCEPTION: {e}")
@@ -59,4 +85,6 @@ async def telegram_webhook(request: Request):
 async def whatsapp_webhook(request: Request):
     data = await request.json()
     assistant = get_next_assistant()
-    return {"status": "received", "assistant": assistant["name"]}
+    active_assistant_name = assistant["name"]
+    print(f"WhatsApp request handled by {active_assistant_name}: {data}")
+    return {"status": "received", "assistant": active_assistant_name}
