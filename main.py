@@ -1,15 +1,11 @@
 import os
 import requests
 from fastapi import FastAPI, Request
-from google import genai
-from google.genai.errors import ServerError, ClientError
 
 app = FastAPI()
 
 TELEGRAM_BOT_TOKEN = "8680814733:AAGUbD-eHtDXy7XyR4N2TpEQmdk0vYX_B8M"
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 @app.get("/")
 async def root():
@@ -22,27 +18,44 @@ async def handle_telegram_webhook(request: Request):
     
     if "message" in data and "text" in data["message"]:
         chat_id = data["message"]["chat"]["id"]
-        user_message = data["message"]["text"]
-        print(f"Текст от пользователя {chat_id}: {user_message}")
+        user_text = data["message"]["text"]
+        print(f"Текст от пользователя {chat_id}: {user_text}")
         
-        telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        ai_reply = "Извините, ошибка генерации."
         
-        try:
-            response = client.models.generate_content(
-                model='gemini-3.5-flash',
-                contents=user_message
-            )
-            reply_text = response.text
-            print(f"Ответ от Gemini: {reply_text}")
-        except (ServerError, ClientError) as e:
-            print(f"Ошибка Gemini API: {e}")
-            reply_text = "Сервер временно перегружен, попробуй отправить сообщение еще раз!"
-        
-        payload = {
+        if GROQ_API_KEY:
+            try:
+                groq_url = "https://api.groq.com/openai/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [
+                        {"role": "user", "content": user_text}
+                    ]
+                }
+                response = requests.post(groq_url, json=payload, headers=headers, timeout=10)
+                res_json = response.json()
+                
+                if response.status_code == 200:
+                    ai_reply = res_json["choices"][0]["message"]["content"]
+                else:
+                    ai_reply = f"Ошибка Groq API: {res_json.get('error', {}).get('message', 'unknown')}"
+            except Exception as e:
+                ai_reply = f"Ошибка подключения к AI: {str(e)}"
+        else:
+            ai_reply = "API ключ Groq не найден в переменных окружения."
+
+        tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        tg_payload = {
             "chat_id": chat_id,
-            "text": reply_text
+            "text": ai_reply
         }
-        res = requests.post(telegram_url, json=payload)
-        print(f"Ответ от Telegram API: {res.status_code}, {res.text}")
-        
-    return {"status": "ok"}
+        tg_response = requests.post(tg_url, json=tg_payload)
+        print("Ответ от Telegram API:", tg_response.status_code, tg_response.text)
+
+    return {"ok": True}
+
+           
