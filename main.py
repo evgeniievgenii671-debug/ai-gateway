@@ -23,7 +23,7 @@ async def handle_telegram_webhook(request: Request):
         user_message = data["message"]["text"]
         
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-2.5-flash',
             contents=user_message
         )
         reply_text = response.text
