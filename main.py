@@ -9,17 +9,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 genai.configure(api_key=GEMINI_API_KEY)
-
-# Выводим в лог список доступных моделей при старте, чтобы точно знать нужную
-try:
-    print("Available models:")
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            print(" -", m.name)
-except Exception as e:
-    print("Could not list models:", e)
-
-# Пробуем использовать стандартную модель без префиксов
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
