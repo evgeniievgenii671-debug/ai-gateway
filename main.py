@@ -1,5 +1,4 @@
 import os
-import google.generativeai as genai
 from fastapi import FastAPI, Request
 import httpx
 
@@ -7,11 +6,6 @@ app = FastAPI()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8680814733:AAGUbD-eHtDXy7XyR4N2TpEQmdk0vYX_B8M")
 TELEGRAM_SEND_MESSAGE_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-
-# Автонастройка Gemini с ключом из переменных Render
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_KEY:
-    genai.configure(api_key=GEMINI_KEY)
 
 # Пул из 4 ассистентов с ротацией по кругу
 AI_ASSISTANTS = [
@@ -31,37 +25,32 @@ def get_next_assistant():
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
-    data = await request.json()
-    
-    if "message" in data and "text" in data["message"]:
-        chat_id = data["message"]["chat"]["id"]
-        user_text = data["message"]["text"]
+    try:
+        data = await request.json()
         
-        assistant = get_next_assistant()
-        active_assistant_name = assistant["name"]
-        
-        system_instruction = (
-            f"Ты — {active_assistant_name}, профессиональный менеджер компании по продаже качественного кафеля "
-            f"и современных эпоксидных полов. Общайся с клиентами живо, дружелюбно, подстраивайся под их стиль речи, "
-            f"отвечай по делу, помогай с выбором и консультируй по характеристикам."
-        )
-        
-        reply_text = ""
-        
-        try:
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            prompt = f"{system_instruction}\n\nКлиент написал: {user_text}"
-            response = model.generate_content(prompt)
-            reply_text = f"[{active_assistant_name}]\n{response.text}"
-        except Exception as e:
-            reply_text = f"[{active_assistant_name}] Привет! Рад помочь с выбором кафеля и эпоксидных полов. Что именно вас интересует?"
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            await client.post(
-                TELEGRAM_SEND_MESSAGE_URL,
-                json={"chat_id": chat_id, "text": reply_text}
+        if "message" in data and "text" in data["message"]:
+            chat_id = data["message"]["chat"]["id"]
+            user_text = data["message"]["text"]
+            
+            assistant = get_next_assistant()
+            active_assistant_name = assistant["name"]
+            
+            # Динамический ответ с учетом запроса клиента
+            reply_text = (
+                f"[{active_assistant_name}]\n"
+                f"Приветствую! Рад помочь вам с выбором. По вашему запросу («{user_text}») "
+                f"могу предложить качественный кафель, эпоксидные полы и сопутствующие материалы. "
+                f"Какой объем вас интересует?"
             )
             
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                await client.post(
+                    TELEGRAM_SEND_MESSAGE_URL,
+                    json={"chat_id": chat_id, "text": reply_text}
+                )
+    except Exception as e:
+        print(f"Error handling webhook: {e}")
+        
     return {"ok": True}
 
 @app.post("/whatsapp-webhook")
