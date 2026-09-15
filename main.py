@@ -4,7 +4,6 @@ import time
 from fastapi import FastAPI, Request
 import httpx
 from google import genai
-from google.genai import errors
 
 app = FastAPI()
 
@@ -21,27 +20,17 @@ async def telegram_webhook(request: Request):
         chat_id = data["message"]["chat"]["id"]
         user_text = data["message"]["text"]
         
-        reply_text = "⚠️ Нейросеть перегружена или недоступна. Пожалуйста, подождите..."
+        reply_text = "⚠️ Ошибка связи с нейросетью."
         
-        for attempt in range(1, 4):
-            try:
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=user_text,
-                )
-                if response and response.text:
-                    reply_text = response.text
-                break
-            except errors.APIError as e:
-                print(f"Ошибка Gemini (попытка {attempt}/3): {e}")
-                if e.code in [429, 503]:
-                    time.sleep(attempt * 5)
-                    continue
-                else:
-                    break
-            except Exception as e:
-                print(f"Непредвиденная ошибка: {e}")
-                break
+        try:
+            response = client.models.generate_content(
+                model="gemini-1.5-flash",
+                contents=user_text,
+            )
+            if response and response.text:
+                reply_text = response.text
+        except Exception as e:
+            print(f"Ошибка: {e}")
 
         async with httpx.AsyncClient() as httpx_client:
             await httpx_client.post(
