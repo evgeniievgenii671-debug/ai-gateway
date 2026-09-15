@@ -2,13 +2,11 @@ import os
 import json
 from fastapi import FastAPI, Request
 import httpx
-from google import genai
 
 app = FastAPI()
 
-os.environ["GEMINI_API_KEY"] = "AQ.Ab8RN6JmyeVvdHmjJfT6sriJX2Sq-G9McoHAP4haLfIUuNDQ"
-
-client = genai.Client()
+GEMINI_API_KEY = "AQ.Ab8RN6KB33zJxlJgz_tjOTji4MYfNQZGVyCE6a5XB-NV1vYDcQ"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
 TELEGRAM_BOT_TOKEN = "8680814733:AAGUbD-eHtDXy7XyR4N2TpEQmdk0vYX_B8M"
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -24,12 +22,23 @@ async def telegram_webhook(request: Request):
         reply_text = "⚠️ Ошибка связи с нейросетью."
         
         try:
-            response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=user_text,
-            )
-            if response and response.text:
-                reply_text = response.text
+            async with httpx.AsyncClient() as client:
+                ai_response = await client.post(
+                    GEMINI_URL,
+                    json={
+                        "contents": [{
+                            "parts": [{"text": user_text}]
+                        }]
+                    },
+                    timeout=10.0
+                )
+                
+                if ai_response.status_code == 200:
+                    res_json = ai_response.json()
+                    reply_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                else:
+                    print(f"ОШИБКА API: {ai_response.text}")
+                    reply_text = f"Ошибка API: {ai_response.status_code}"
         except Exception as e:
             print(f"ПОДРОБНАЯ ОШИБКА: {e}")
             reply_text = f"Ошибка: {str(e)}"
