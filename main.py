@@ -31,17 +31,15 @@ async def telegram_webhook(request: Request):
         chat_id = None
         user_text = ""
         
-        if "message" in data:
-            chat_id = data["message"]["chat"]["id"]
-            user_text = data["message"].get("text", "")
-        elif "edited_message" in data:
-            chat_id = data["edited_message"]["chat"]["id"]
-            user_text = data["edited_message"].get("text", "")
-        elif "callback_query" in data:
-            chat_id = data["callback_query"]["message"]["chat"]["id"]
-            user_text = data["callback_query"].get("data", "")
+        # Универсальный сборщик chat_id из любых типов входящих данных Telegram
+        msg = data.get("message") or data.get("edited_message") or (data.get("callback_query") and data["callback_query"].get("message"))
+        
+        if msg and "chat" in msg:
+            chat_id = msg["chat"].get("id")
+            user_text = msg.get("text") or msg.get("data") or ""
             
         if not chat_id:
+            print("ERROR: chat_id not found in payload")
             return {"ok": True}
             
         assistant = get_next_assistant()
