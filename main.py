@@ -2,6 +2,7 @@ import os
 import requests
 from fastapi import FastAPI, Request
 from google import genai
+from google.genai.errors import ServerError, ClientError
 
 app = FastAPI()
 
@@ -22,13 +23,17 @@ async def handle_telegram_webhook(request: Request):
         chat_id = data["message"]["chat"]["id"]
         user_message = data["message"]["text"]
         
-        response = client.models.generate_content(
-            model='gemini-3.5-flash',
-            contents=user_message
-        )
-        reply_text = response.text
-        
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        
+        try:
+            response = client.models.generate_content(
+                model='gemini-3.5-flash',
+                contents=user_message
+            )
+            reply_text = response.text
+        except (ServerError, ClientError) as e:
+            reply_text = "Сервер временно перегружен, попробуй отправить сообщение еще раз через пару секунд!"
+        
         payload = {
             "chat_id": chat_id,
             "text": reply_text
