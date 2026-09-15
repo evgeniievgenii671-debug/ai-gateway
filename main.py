@@ -6,7 +6,7 @@ from google.genai.errors import ServerError, ClientError
 
 app = FastAPI()
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_TOKEN = "8680814733:AAGUbD-eHtDXy7XyR4N2Tp EQmdk0vYX_B8M"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else genai.Client()
