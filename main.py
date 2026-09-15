@@ -19,10 +19,10 @@ async def handle_telegram_webhook(request: Request):
         user_message = data["message"]["text"]
         
         response = client.models.generate_content(
-        ответ = клиент.модели.generate_content(
             model='gemini-1.5-flash',
-            contents=сообщение_пользователя
+            contents=user_message
         )
+        reply_text = response.text
         
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {
@@ -32,4 +32,3 @@ async def handle_telegram_webhook(request: Request):
         requests.post(telegram_url, json=payload)
         
     return {"status": "ok"}
-               
